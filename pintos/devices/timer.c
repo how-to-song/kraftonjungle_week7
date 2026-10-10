@@ -135,8 +135,24 @@ timer_print_stats (void) {
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
+
+	//# traversing sleep_list and unblocking ready threads (can be separated to thread_awake)
+	struct list_elem *e = list_begin(&sleep_list);
+	while (e != list_end(&sleep_list)) {
+		struct thread *t = list_entry(e, struct thread, elem);
+		if (t->wakeup_tick <= ticks) {		//# wake time has already passed or is now
+			e = list_remove(e);				//# remove elem and return next one
+			thread_unblock(t);				//# unblock the thread and move to ready_list
+		} else {
+			e = list_next(e);
+		}
+	}
 	thread_tick ();
 }
+
+
+
+
 
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */
