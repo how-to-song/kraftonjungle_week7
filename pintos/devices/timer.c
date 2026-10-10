@@ -20,6 +20,8 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
+static struct list sleep_list;
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
@@ -28,6 +30,7 @@ static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
+static bool cmp_wakeup_time (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
@@ -37,6 +40,8 @@ timer_init (void) {
 	/* 8254 input frequency divided by TIMER_FREQ, rounded to
 	   nearest. */
 	uint16_t count = (1193180 + TIMER_FREQ / 2) / TIMER_FREQ;
+
+	list_init (&sleep_list);			// sleep_list 초기화
 
 	outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
 	outb (0x40, count & 0xff);
@@ -90,11 +95,22 @@ timer_elapsed (int64_t then) {
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
+	if (ticks <= 0) return;
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+
+	struct thread *curr = thread_current();
+
+	enum intr_level old_level = intr_disable();
+	curr->wakeup_time = start + ticks;
+	
+	// sleep_list에 정렬해서 넣음
+	list_insert_ordered(&sleep_list, &curr->elem, cmp_wakeup_time, NULL);
+
+	thread_block();
+
+	intr_set_level(old_level);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -125,6 +141,16 @@ timer_print_stats (void) {
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
+	
+	if (!list_empty(&sleep_list)) {
+		struct list_elem *curr = list_front(&sleep_list);
+		struct thread *sleep_list_curr;
+		while (!list_empty(&sleep_list) && (sleep_list_curr = list_entry(curr, struct thread, elem))->wakeup_time <= ticks) {
+			curr = list_remove(curr);
+			thread_unblock(sleep_list_curr);
+		}
+	}
+
 	thread_tick ();
 }
 
@@ -183,4 +209,12 @@ real_time_sleep (int64_t num, int32_t denom) {
 		ASSERT (denom % 1000 == 0);
 		busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000));
 	}
+}
+
+static bool
+cmp_wakeup_time (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+	struct thread *thread_a = list_entry(a, struct thread, elem);
+	struct thread *thread_b = list_entry(b, struct thread, elem);
+
+	return thread_a->wakeup_time < thread_b->wakeup_time ? 1 : 0;
 }
