@@ -23,6 +23,7 @@ static int64_t ticks;
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
+static struct list sleep_list;
 
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
@@ -37,6 +38,8 @@ timer_init (void) {
 	/* 8254 input frequency divided by TIMER_FREQ, rounded to
 	   nearest. */
 	uint16_t count = (1193180 + TIMER_FREQ / 2) / TIMER_FREQ;
+	list_init(&sleep_list); // 리스트 일단 초기화
+
 
 	outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
 	outb (0x40, count & 0xff);
@@ -71,7 +74,7 @@ timer_calibrate (void) {
 }
 
 /* Returns the number of timer ticks since the OS booted. */
-int64_t
+int64_t // pintos가 시작한 뒤 지금까지 지난 tick수를 안전하게 읽어서 반환하는 함수.
 timer_ticks (void) {
 	enum intr_level old_level = intr_disable ();
 	int64_t t = ticks;
@@ -90,11 +93,20 @@ timer_elapsed (int64_t then) {
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
-	int64_t start = timer_ticks ();
+	struct thread *cur;
+	enum intr_level old_level; 
 
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	if (ticks <= 0)
+		return;
+
+	old_level = intr_disable (); // 현재 CPU가 타이머 같은 하드웨어 인터럽트를 처리하지 못하게
+	// 막기전 상태를 돌려주는 함수,
+	cur = thread_current (); // 이미 실행중인 스레드를 가져옴.
+	cur->wake_tick = timer_ticks () + ticks; // 지금까지 틱 더하기 들어오는 틱
+	list_push_back (&sleep_list, &cur->elem); //
+	thread_block (); //  상태 블락으로 만들기 thread_block()지금 실행중인 스레드를 멈추고,다른 스레드에게 CPU를 넘기는 함수.
+	intr_set_level (old_level); //  타이머가 이 스레드를 깨우고 다시 실행 순서가 왔을 때 그다음 줄로 돌아와서 원래 인터럽트 상태를 복원
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -122,10 +134,25 @@ timer_print_stats (void) {
 }
 
 /* Timer interrupt handler. */
-static void
-timer_interrupt (struct intr_frame *args UNUSED) {
-	ticks++;
-	thread_tick ();
+static void //시간이 되면 깨우기 sleep_list를 확인하고 READY로 변경
+timer_interrupt (struct intr_frame *args UNUSED) { //타이머 인터럽트가 발생할 때마다 실행되는 인터럽트 핸들러
+	struct list_elem *e; // 리스트 목록 원소 가라키는 함수
+
+	ticks++;//일단 여기에 들어오면 틱 하나 올리기
+
+	for (e = list_begin (&sleep_list); e != list_end (&sleep_list); ) { // 슬립 리스트의 처음부터 끝까지
+		struct thread *t = list_entry (e, struct thread, elem); 
+
+		if (t->wake_tick == ticks) { // 꺠어날 시간이 되었는지 검사 
+			e = list_remove (e);//현재 e가 가리키는 요소를 sleep_list에서 제거 , 다음 e가 가리키는 요소 주소 반환 그니깐 다음 노드 주소 알려줌 함수안에서
+			thread_unblock (t); // 스레드 레디로 바꾸고 레디 리스트에 넣음
+		} else {
+			e = list_next (e);// 시간 안되면 다음 스레드로 넘어감
+		}
+	}
+
+	thread_tick (); //하나의 스레드가 CPU를 계속 독점하지 못하도록 하기 위해서 -> 스케줄러가 정상적으로 작동되어야함.
+	//현재 CPU를 사용 중인 스레드가 CPU를 양보할 때가 됐는지 확인하는 역할
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
