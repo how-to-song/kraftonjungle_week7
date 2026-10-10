@@ -88,20 +88,24 @@ timer_ticks (void) {
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
-int64_t
-timer_elapsed (int64_t then) {
-	return timer_ticks () - then;
-}
+int64_t timer_elapsed (int64_t then) {return timer_ticks () - then;}
 
-/* Suspends execution for approximately TICKS timer ticks. */
+
+/* Suspends execution for approximately TICKS timer ticks.
+*/
 void
 timer_sleep (int64_t ticks) {
+	if (ticks <= 0) {return;}						//# Edge case : if ticks is <=0, return
 	int64_t start = timer_ticks ();
-
+	struct thread *t = thread_current();			//# get current thread
+	t-> wakeup_tick = start + ticks;				//# calculate wakeup tick of current thread
+	enum intr_level old_level = intr_disable ();	//# disable interrupts and save level
+	list_push_back(&sleep_list, &t->elem);			//# insert thread into sleep_list
+	thread_block();									//# put current thread to sleep
+	intr_set_level(old_level);						//# enable interrupts again
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
 }
+
 
 /* Suspends execution for approximately MS milliseconds. */
 void
