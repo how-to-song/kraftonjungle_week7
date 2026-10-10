@@ -90,11 +90,29 @@ timer_elapsed (int64_t then) {
 /* Suspends execution for approximately TICKS timer ticks. */
 void
 timer_sleep (int64_t ticks) {
+	if (ticks <= 0) return;
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	// while (timer_elapsed (start) < ticks)
+	// 	thread_yield ();
+
+	struct thread *curr = thread_current();
+
+	enum intr_level old_level = intr_disable();
+	curr->wakeup_time = start + ticks;
+	
+	// 리스트가 비어있지 않으면 정렬해서 넣음
+	if (!list_empty(&sleep_list)) {
+		list_insert_ordered(&sleep_list, &curr->elem, cmp_wakeup_time, NULL);
+	}
+	// 리스트가 비어있으면 그냥 넣음
+	else {
+		list_push_front(&sleep_list, &curr->elem);
+	}
+	thread_block();
+
+	intr_set_level(old_level);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -125,6 +143,16 @@ timer_print_stats (void) {
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
+	
+	if (!list_empty(&sleep_list)) {
+		struct list_elem *curr = list_front(&sleep_list);
+		struct thread *sleep_list_curr;
+		while (!list_empty(&sleep_list) && (sleep_list_curr = list_entry(curr, struct thread, elem))->wakeup_time <= ticks) {
+			curr = list_remove(curr);
+			thread_unblock(sleep_list_curr);
+		}
+	}
+
 	thread_tick ();
 }
 

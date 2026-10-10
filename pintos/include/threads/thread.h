@@ -94,6 +94,7 @@ struct thread {
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	int64_t wakeup_time;					/*해제되어야 하는 시간*/
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -108,6 +109,10 @@ struct thread {
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
 };
+
+// block된 스레드의 리스트
+extern struct list sleep_list;
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -142,5 +147,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+bool cmp_wakeup_time (const struct list_elem *a, const struct list_elem *b, void *aux);
 
 #endif /* threads/thread.h */
