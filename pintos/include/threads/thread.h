@@ -110,10 +110,6 @@ struct thread {
 	unsigned magic;                     /* Detects stack overflow. */
 };
 
-// block된 스레드의 리스트
-extern struct list sleep_list;
-
-
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -147,6 +143,5 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
-bool cmp_wakeup_time (const struct list_elem *a, const struct list_elem *b, void *aux);
 
 #endif /* threads/thread.h */
