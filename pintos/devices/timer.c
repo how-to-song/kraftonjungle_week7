@@ -92,19 +92,19 @@ timer_elapsed (int64_t then) {
 
 /* Suspends execution for approximately TICKS timer ticks. */
 void
-timer_sleep (int64_t ticks) {
+timer_sleep (int64_t ticks) {//깨울 시간 기록,스레드 재우기
 	struct thread *cur;
 	enum intr_level old_level; 
 
-	ASSERT (intr_get_level () == INTR_ON);
+	ASSERT (intr_get_level () == INTR_ON);// 인터럽트가 켜져있어야한다. 아니면 오류.
 	if (ticks <= 0)
 		return;
 
-	old_level = intr_disable (); // 현재 CPU가 타이머 같은 하드웨어 인터럽트를 처리하지 못하게
+	old_level = intr_disable (); // 현재 CPU가 인터럽트를 처리하지 못하게 -작업 사이에 인터럽트가 끼어들지 못하게
 	// 막기전 상태를 돌려주는 함수,
-	cur = thread_current (); // 이미 실행중인 스레드를 가져옴.
+	cur = thread_current (); // 현재 실행중인 스레드를 가져옴.
 	cur->wake_tick = timer_ticks () + ticks; // 지금까지 틱 더하기 들어오는 틱
-	list_push_back (&sleep_list, &cur->elem); //
+	list_push_back (&sleep_list, &cur->elem); // 맨뒤로 보내고 연결을 한다. elem은 prev succ같은 느낌.
 	thread_block (); //  상태 블락으로 만들기 thread_block()지금 실행중인 스레드를 멈추고,다른 스레드에게 CPU를 넘기는 함수.
 	intr_set_level (old_level); //  타이머가 이 스레드를 깨우고 다시 실행 순서가 왔을 때 그다음 줄로 돌아와서 원래 인터럽트 상태를 복원
 }
@@ -141,7 +141,7 @@ timer_interrupt (struct intr_frame *args UNUSED) { //타이머 인터럽트가 �
 	ticks++;//일단 여기에 들어오면 틱 하나 올리기
 
 	for (e = list_begin (&sleep_list); e != list_end (&sleep_list); ) { // 슬립 리스트의 처음부터 끝까지
-		struct thread *t = list_entry (e, struct thread, elem); 
+		struct thread *t = list_entry (e, struct thread, elem); //목록에서 찾은 elem이 어느 스레드의 것인지 알아냄
 
 		if (t->wake_tick == ticks) { // 꺠어날 시간이 되었는지 검사 
 			e = list_remove (e);//현재 e가 가리키는 요소를 sleep_list에서 제거 , 다음 e가 가리키는 요소 주소 반환 그니깐 다음 노드 주소 알려줌 함수안에서

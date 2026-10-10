@@ -28,6 +28,7 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -92,6 +93,7 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
    It is not safe to call thread_current() until this function
    finishes. */
+   
 void
 thread_init (void) {
 	ASSERT (intr_get_level () == INTR_OFF);
@@ -217,7 +219,7 @@ thread_create (const char *name, int priority,
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
 void
-thread_block (void) {
+thread_block (void) { //지금 실행중인 스레드를 멈추고,다른 스레드에게 CPU
 	ASSERT (!intr_context ());
 	ASSERT (intr_get_level () == INTR_OFF);
 	thread_current ()->status = THREAD_BLOCKED;
