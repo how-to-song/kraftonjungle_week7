@@ -62,7 +62,6 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
-static bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -596,7 +595,7 @@ allocate_tid (void) {
 	return tid;
 }
 
-static bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
 	struct thread *thread_a = list_entry(a, struct thread, elem);
 	struct thread *thread_b = list_entry(b, struct thread, elem);
 
