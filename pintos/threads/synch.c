@@ -119,18 +119,6 @@ sema_up (struct semaphore *sema) {
 }
 
 
-static bool
-cmp_sem_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-    struct semaphore_elem *sem_a = list_entry(a, struct semaphore_elem, elem);
-    struct semaphore_elem *sem_b = list_entry(b, struct semaphore_elem, elem);
-    struct thread *thread_a = list_entry(list_front(&sem_a->semaphore.waiters), struct thread, elem);
-    struct thread *thread_b = list_entry(list_front(&sem_b->semaphore.waiters), struct thread, elem);
-    return thread_a->priority > thread_b->priority;
-}
-
-
-
-
 static void sema_test_helper (void *sema_);
 
 /* Self-test for semaphores that makes control "ping-pong"
@@ -256,6 +244,18 @@ struct semaphore_elem {
 	struct list_elem elem;              /* List element. */
 	struct semaphore semaphore;         /* This semaphore. */
 };
+
+
+static bool
+cmp_sem_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+    struct semaphore_elem *sem_a = list_entry(a, struct semaphore_elem, elem);
+    struct semaphore_elem *sem_b = list_entry(b, struct semaphore_elem, elem);
+    struct thread *thread_a = list_entry(list_front(&sem_a->semaphore.waiters), struct thread, elem);
+    struct thread *thread_b = list_entry(list_front(&sem_b->semaphore.waiters), struct thread, elem);
+    return thread_a->priority > thread_b->priority;
+}
+
+
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
