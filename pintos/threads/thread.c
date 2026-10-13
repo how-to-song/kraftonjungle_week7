@@ -312,6 +312,16 @@ thread_yield (void) {
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
+bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+	const struct thread *thread_a = list_entry (a, struct thread, donation_elem);
+	const struct thread *thread_b = list_entry(b,struct thread, donation_elem);
+	return thread_a->priority > thread_b ->priority ? 1:0 ;
+	
+}
+
+
+
+
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
