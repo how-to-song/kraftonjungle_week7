@@ -233,11 +233,11 @@ lock_acquire (struct lock *lock) {
 	enum intr_level old_level = intr_disable();
 	if (lock->holder != NULL) {
 		curr->waiting_lock = lock;
-		struct thread *update_lock_holder = lock->holder;
-		while(update_lock_holder != NULL) {
-			if (curr->priority > update_lock_holder->priority) update_lock_holder->priority = curr->priority;
-			if (update_lock_holder->waiting_lock == NULL) break;
-			update_lock_holder = update_lock_holder->waiting_lock->holder;
+		struct thread *holder = lock->holder;
+		while(holder != NULL) {
+			if (curr->priority > holder->priority) holder->priority = curr->priority;
+			if (holder->waiting_lock == NULL) break;
+			holder = holder->waiting_lock->holder;
 		}
 		list_push_back(&lock->holder->donation_list, &curr->donation_elem);
 	}
