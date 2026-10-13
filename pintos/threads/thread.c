@@ -312,13 +312,47 @@ thread_yield (void) {
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
+bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+	const struct thread *thread_a = list_entry (a, struct thread, donation_elem);
+	const struct thread *thread_b = list_entry(b,struct thread, donation_elem);
+	return thread_a->priority > thread_b ->priority ? 1:0 ;
+	
+}
+
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void
-thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
-	thread_yield();
+void thread_set_priority (int new_priority) {
+	enum intr_level old_level = intr_disable ();
+	struct thread *cur = thread_current ();
+	int max_priority = new_priority;
+	bool should_yield = false;
+
+	cur->original_priority = new_priority;
+
+	if (!list_empty (&cur->donation_list)) {
+		struct thread *donor;
+		list_sort (&cur->donation_list, cmp_donation_priority, NULL);
+		donor = list_entry (list_front (&cur->donation_list), struct thread, donation_elem);
+		if (donor->priority > max_priority)
+			max_priority = donor->priority;
+	}
+	if (!list_empty (&ready_list)){
+		struct thread *next = list_entry (list_front (&ready_list), struct thread, elem);
+		should_yield = next->priority > cur->priority;
+	}
+
+	cur->priority = max_priority;
+
+	intr_set_level (old_level);
+	
+	if(should_yield == true){
+		thread_yield();
+	}
 }
+
+
+
+
 
 /* Returns the current thread's priority. */
 int
