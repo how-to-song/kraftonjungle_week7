@@ -229,8 +229,23 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	struct thread *curr = thread_current();
+	enum intr_level old_level = intr_disable();
+	if (lock->holder != NULL) {
+		curr->waiting_lock = lock;
+		struct thread *holder = lock->holder;
+		while(holder != NULL) {
+			if (curr->priority > holder->priority) holder->priority = curr->priority;
+			if (holder->waiting_lock == NULL) break;
+			holder = holder->waiting_lock->holder;
+		}
+		list_push_back(&lock->holder->donation_list, &curr->donation_elem);
+	}
 	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+	curr->waiting_lock = NULL;
+	lock->holder = curr;
+
+	intr_set_level(old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
