@@ -258,6 +258,22 @@ lock_try_acquire (struct lock *lock) {
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
+
+/*
+# ASSERT Sanity check
+# [disable interrupts]
+#    for each donor in current_thread->donation_list:
+#      if donor->waiting_lock == lock:
+#        remove from donation_list
+#    
+#    recalculate current_thread->priority:
+#      = original_priority
+#      if donation_list not empty:
+#        = max(original_priority, max priority in donation_list)
+# [re-enable interrupts]
+# lock->holder = NULL
+# sema_up(&lock->semaphore)
+*/
 void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
@@ -265,6 +281,18 @@ lock_release (struct lock *lock) {
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
+
+	struct thread *cur = thread_current;
+
+	struct list_elem *e = list_begin(&cur->donation_list);
+	while (e != list_end(&cur->donation_list)) {
+		struct thread *t = list_entry(e, struct thread, donation_elem);
+		if (t->waiting_lock == lock) {
+			e = list_remove(e);  // list_remove returns the next elem automatically
+		} else {
+			e = list_next(e);
+		}
+	}
 }
 
 /* Returns true if the current thread holds LOCK, false
