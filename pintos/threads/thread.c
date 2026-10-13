@@ -336,18 +336,15 @@ void thread_set_priority (int new_priority) {
 		if (donor->priority > max_priority)
 			max_priority = donor->priority;
 	}
+
+	cur->priority = max_priority;
 	if (!list_empty (&ready_list)){
 		struct thread *next = list_entry (list_front (&ready_list), struct thread, elem);
 		should_yield = next->priority > cur->priority;
 	}
-
-	cur->priority = max_priority;
+	if(should_yield == true){thread_yield();}
 
 	intr_set_level (old_level);
-	
-	if(should_yield == true){
-		thread_yield();
-	}
 }
 
 
