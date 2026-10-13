@@ -17,6 +17,9 @@ enum thread_status {
 	THREAD_BLOCKED,     /* Waiting for an event to trigger. */
 	THREAD_DYING        /* About to be destroyed. */
 };
+bool cmp_donation_priority(const struct list_elem *a,
+                           const struct list_elem *b,
+                           void *aux);
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
