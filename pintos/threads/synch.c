@@ -273,14 +273,77 @@ lock_try_acquire (struct lock *lock) {
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
+
+/*
+# ASSERT Sanity check
+# [disable interrupts]
+#    for each donor in current_thread->donation_list:
+#      if donor->waiting_lock == lock:
+#        remove from donation_list
+#	 refresh_priority
+# [re-enable interrupts]
+# lock->holder = NULL
+# sema_up(&lock->semaphore)
+*/
 void
 lock_release (struct lock *lock) {
+	//# 1. Sanity check
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
+	//# 2. Disable interrupt
+	//# NOTE : interrupt isn't always on when lock is being released but intr_disable turns off regardless
+	enum intr_level old_level = intr_disable();
+
+	//# 3. Remove all that were waiting on this specific lock
+	struct thread *cur = thread_current();
+	struct list_elem *e = list_begin(&cur->donation_list);				//* Get first elem of donation list
+	while (e != list_end(&cur->donation_list)) {			
+		struct thread *t = list_entry(e, struct thread, donation_elem);	//* Convert list_elem to thread
+		if (t->waiting_lock == lock) {
+			e = list_remove(e);  										//* list_remove returns the next elem automatically
+		} else {
+			e = list_next(e);
+		}
+	}
+
+	//# 4. Recalculate effective priority
+	refresh_priority(cur);
+
+	//# 5. Enable interrupt
+	intr_set_level(old_level);
+
+	//# 6. Let go of hold of lock
 	lock->holder = NULL;
+
+	//# 7. Check the lock's waiter for next thread with highest priority
 	sema_up (&lock->semaphore);
 }
+
+/* 
+# Helper method : recalculates current thread's effective priority from donation list and original priority
+#      	if donation_list is empty = original_priority
+#      	if donation_list not empty = max(original_priority, max priority in donation_list)
+# NOTE : can't use list_max because it would return min instead of max for cmp_donation_priority
+*/
+void
+refresh_priority (struct thread *thread) {
+	if(!list_empty(&thread->donation_list)) {
+		list_sort (&thread->donation_list, cmp_donation_priority, NULL);
+		struct thread *top_donor = list_entry (list_front(&thread->donation_list), struct thread, donation_elem);
+		thread->priority = (thread->original_priority > top_donor->priority) ? thread->original_priority : top_donor->priority;
+	} else {
+		thread->priority = thread->original_priority;
+	}
+}
+
+
+
+
+
+
+
+
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
@@ -311,7 +374,7 @@ cmp_sem_priority(const struct list_elem *a, const struct list_elem *b, void *aux
     struct semaphore_elem *sem_b = list_entry(b, struct semaphore_elem, elem);
     struct thread *thread_a = list_entry(list_front(&sem_a->semaphore.waiters), struct thread, elem);
     struct thread *thread_b = list_entry(list_front(&sem_b->semaphore.waiters), struct thread, elem);
-    return thread_a->priority > thread_b->priority;
+    return thread_a->priority > thread_b->priority ? 1 : 0;
 }
 
 
