@@ -193,14 +193,8 @@ lock_acquire (struct lock *lock) {
 
 	struct thread *curr = thread_current();
 	enum intr_level old_level = intr_disable();
-	if (lock->holder != NULL) {
-		curr->waiting_lock = lock;
-		struct thread *holder = lock->holder;
-		while(holder != NULL) {
-			if (curr->priority > holder->priority) holder->priority = curr->priority;
-			if (holder->waiting_lock == NULL) break;
-			holder = holder->waiting_lock->holder;
-		}
+	if (lock->holder != NULL) {		//# Only do donation work if there is a thread holding the lock
+		donate_priority(lock, curr);
 		list_push_back(&lock->holder->donation_list, &curr->donation_elem);
 	}
 	sema_down (&lock->semaphore);
@@ -209,6 +203,24 @@ lock_acquire (struct lock *lock) {
 
 	intr_set_level(old_level);
 }
+
+void
+donate_priority(struct lock *lock, struct thread *thread) {
+	thread->waiting_lock = lock;
+	struct thread *holder = lock->holder;
+	int depth = 0;				//# limit nested donation depth to 8
+	while(holder != NULL && depth < 8) {
+		if (thread->priority > holder->priority) holder->priority = thread->priority;
+		if (holder->waiting_lock == NULL) break;
+		holder = holder->waiting_lock->holder;
+		depth++;
+	}
+}
+
+
+
+
+
 
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
