@@ -17,9 +17,6 @@ enum thread_status {
 	THREAD_BLOCKED,     /* Waiting for an event to trigger. */
 	THREAD_DYING        /* About to be destroyed. */
 };
-bool cmp_donation_priority(const struct list_elem *a,
-                           const struct list_elem *b,
-                           void *aux);
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
@@ -154,5 +151,6 @@ void do_iret (struct intr_frame *tf);
 
 // 우선순위 비교함수
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void refresh_priority (struct thread *thread);
 
 #endif /* threads/thread.h */
