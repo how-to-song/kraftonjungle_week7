@@ -294,30 +294,6 @@ lock_release (struct lock *lock) {
 	sema_up (&lock->semaphore);
 }
 
-/* 
-# Helper method : recalculates current thread's effective priority from donation list and original priority
-#      	if donation_list is empty = original_priority
-#      	if donation_list not empty = max(original_priority, max priority in donation_list)
-# NOTE : can't use list_max because it would return min instead of max for cmp_donation_priority
-*/
-void
-refresh_priority (struct thread *thread) {
-	if(!list_empty(&thread->donation_list)) {
-		list_sort (&thread->donation_list, cmp_donation_priority, NULL);
-		struct thread *top_donor = list_entry (list_front(&thread->donation_list), struct thread, donation_elem);
-		thread->priority = (thread->original_priority > top_donor->priority) ? thread->original_priority : top_donor->priority;
-	} else {
-		thread->priority = thread->original_priority;
-	}
-}
-
-
-
-
-
-
-
-
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
