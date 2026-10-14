@@ -102,44 +102,6 @@ sema_try_down (struct semaphore *sema) {
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
-
-/* 
-# 	Timer wakeup and lock release have different cycles
-#		Lock opens up whenever the thread that was holding it is done
-#		Timer goes off regularly
-#		But it doesn't matter if they overlap because they all end up in the ready list, where it's sorted by priority anyway
-#		They all funnel into thread_unblock() → ready list → scheduler picks highest priority. The timing of how they got there is irrelevant.
-#				Timer wakeup : 			timer_interrupt() ──> thread_unblock() ──> ready list
-#				Semaphore : 			sema_up()         ──> thread_unblock() ──> ready list
-#				Conditional Variable : 	cond_signal()     ──> sema_up() 	   ──> thread_unblock() ──> ready list
-
-# 	How thread is added to sema waiter
-#		When a thread needs to read or write data safely, it calls lock_acquire (programmer writes it before touching the shared data)
-#		lock_acquire calls sema_down internally. 
-#
-#	Cond waiter flow
-#		cond_signal is called by the programmer explicitly and only when the programmer calls it.
-#		The programmer knows when the condition might have become true, and calls cond_signal at that moment.
-#		The cond waiter can grab the lock immediately if either:
-#				1) The lock is free (no one holds it), or
-#				2) The cond waiter has higher priority than whoever else is waiting for the lock
-#				Otherwise it joins lock->sema->waiters and waits.
-#
-#		thread calls cond_wait() → BLOCKED in cond->waiters
-#		→ cond_signal() wakes it → moves to ready list
-#		→ tries lock_acquire() → BLOCKED in lock->sema->waiters if lock held
-#		→ lock_release() frees it → acquires lock
-#		→ checks while(!condition) → false: back to cond_wait() / true: do_the_work()
-
-#		[Wake up from condwaiter or semawaiter → check condition → still false → sleep again → wake up → check again → true → proceed]
-#				cond_signal()
-#				→ wakes thread from cond->waiters
-#				→ thread tries to re-acquire lock (goes into lock->sema->waiters if locked)
-#				→ lock_release() eventually frees the lock
-#				→ thread acquires lock, resumes after cond_wait()
-#				→ thread checks while(!condition) itself right after getting the lock
-#				→ if condition not met: calls cond_wait() again → back to cond->waiters
-*/
 void
 sema_up (struct semaphore *sema) {
 	enum intr_level old_level;
