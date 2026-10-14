@@ -32,6 +32,11 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+#define DONATION_DEPTH_LIMIT 8
+
+static bool cmp_sem_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+static void donate_priority(struct lock *lock, struct thread *thread);
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -194,6 +199,7 @@ lock_acquire (struct lock *lock) {
 	struct thread *curr = thread_current();
 	enum intr_level old_level = intr_disable();
 	if (lock->holder != NULL) {		//# Only do donation work if there is a thread holding the lock
+		curr->waiting_lock = lock;
 		donate_priority(lock, curr);
 		list_push_back(&lock->holder->donation_list, &curr->donation_elem);
 	}
@@ -204,23 +210,17 @@ lock_acquire (struct lock *lock) {
 	intr_set_level(old_level);
 }
 
-void
+static void
 donate_priority(struct lock *lock, struct thread *thread) {
-	thread->waiting_lock = lock;
 	struct thread *holder = lock->holder;
-	int depth = 0;				//# limit nested donation depth to 8
-	while(holder != NULL && depth < 8) {
+	int depth = 0;	
+	while(holder != NULL && depth < DONATION_DEPTH_LIMIT) {
 		if (thread->priority > holder->priority) holder->priority = thread->priority;
 		if (holder->waiting_lock == NULL) break;
 		holder = holder->waiting_lock->holder;
 		depth++;
 	}
 }
-
-
-
-
-
 
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
@@ -324,7 +324,7 @@ cmp_sem_priority(const struct list_elem *a, const struct list_elem *b, void *aux
     struct semaphore_elem *sem_b = list_entry(b, struct semaphore_elem, elem);
     struct thread *thread_a = list_entry(list_front(&sem_a->semaphore.waiters), struct thread, elem);
     struct thread *thread_b = list_entry(list_front(&sem_b->semaphore.waiters), struct thread, elem);
-    return thread_a->priority > thread_b->priority ? 1 : 0;
+    return thread_a->priority > thread_b->priority;
 }
 
 
