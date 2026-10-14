@@ -328,26 +328,40 @@ void thread_set_priority (int new_priority) {
 	bool should_yield = false;
 
 	cur->original_priority = new_priority;
+	// if (!list_empty (&cur->donation_list)) {
+	// 	struct thread *donor;
+	// 	list_sort (&cur->donation_list, cmp_donation_priority, NULL);
+	// 	donor = list_entry (list_front (&cur->donation_list), struct thread, donation_elem);
+	// 	if (donor->priority > max_priority)
+	// 		max_priority = donor->priority;
+	// }
+	// cur->priority = max_priority;
 
-	if (!list_empty (&cur->donation_list)) {
-		struct thread *donor;
-		list_sort (&cur->donation_list, cmp_donation_priority, NULL);
-		donor = list_entry (list_front (&cur->donation_list), struct thread, donation_elem);
-		if (donor->priority > max_priority)
-			max_priority = donor->priority;
-	}
-
-	cur->priority = max_priority;
+	refresh_priority(cur);
 	if (!list_empty (&ready_list)){
 		struct thread *next = list_entry (list_front (&ready_list), struct thread, elem);
 		should_yield = next->priority > cur->priority;
 	}
-	if(should_yield == true){thread_yield();}
-
 	intr_set_level (old_level);
+	if(should_yield == true){thread_yield();}
 }
 
-
+/* 
+# Helper method : recalculates current thread's effective priority from donation list and original priority
+#      	if donation_list is empty = original_priority
+#      	if donation_list not empty = max(original_priority, max priority in donation_list)
+# NOTE : can't use list_max because it would return min instead of max for cmp_donation_priority
+*/
+void
+refresh_priority (struct thread *thread) {
+	if(!list_empty(&thread->donation_list)) {
+		list_sort (&thread->donation_list, cmp_donation_priority, NULL);
+		struct thread *top_donor = list_entry (list_front(&thread->donation_list), struct thread, donation_elem);
+		thread->priority = (thread->original_priority > top_donor->priority) ? thread->original_priority : top_donor->priority;
+	} else {
+		thread->priority = thread->original_priority;
+	}
+}
 
 
 
