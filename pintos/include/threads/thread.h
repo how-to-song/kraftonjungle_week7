@@ -17,6 +17,9 @@ enum thread_status {
 	THREAD_BLOCKED,     /* Waiting for an event to trigger. */
 	THREAD_DYING        /* About to be destroyed. */
 };
+bool cmp_donation_priority(const struct list_elem *a,
+                           const struct list_elem *b,
+                           void *aux);
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
@@ -85,13 +88,18 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
+struct lock;
+
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
-	int priority;                       /* Priority. */
-
+	int priority;                       /* Effective priority. */
+	int original_priority;              /* Priority without donations. */
+	struct list donation_list;          /* Threads donating to this thread. */
+	struct list_elem donation_elem;     /* Element in another thread's donation list. */
+	struct lock *waiting_lock;          /* Lock this thread is waiting to acquire. */
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 	int64_t wakeup_time;					/*해제되어야 하는 시간*/
@@ -143,5 +151,8 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+// 우선순위 비교함수
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 #endif /* threads/thread.h */

@@ -207,6 +207,8 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
+	if (thread_current()->priority < priority) thread_yield();
+
 	return tid;
 }
 
@@ -240,7 +242,9 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	// list_push_back (&ready_list, &t->elem);
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
+
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -303,16 +307,49 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		// list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
+bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+	const struct thread *thread_a = list_entry (a, struct thread, donation_elem);
+	const struct thread *thread_b = list_entry(b,struct thread, donation_elem);
+	return thread_a->priority > thread_b ->priority ? 1:0 ;
+	
+}
+
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void
-thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+void thread_set_priority (int new_priority) {
+	enum intr_level old_level = intr_disable ();
+	struct thread *cur = thread_current ();
+	int max_priority = new_priority;
+	bool should_yield = false;
+
+	cur->original_priority = new_priority;
+
+	if (!list_empty (&cur->donation_list)) {
+		struct thread *donor;
+		list_sort (&cur->donation_list, cmp_donation_priority, NULL);
+		donor = list_entry (list_front (&cur->donation_list), struct thread, donation_elem);
+		if (donor->priority > max_priority)
+			max_priority = donor->priority;
+	}
+
+	cur->priority = max_priority;
+	if (!list_empty (&ready_list)){
+		struct thread *next = list_entry (list_front (&ready_list), struct thread, elem);
+		should_yield = next->priority > cur->priority;
+	}
+	if(should_yield == true){thread_yield();}
+
+	intr_set_level (old_level);
 }
+
+
+
+
 
 /* Returns the current thread's priority. */
 int
@@ -408,6 +445,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
+	t->original_priority = priority;
+	list_init (&t->donation_list);
+	t->waiting_lock = NULL;
 	t->wakeup_time = 0;
 	t->magic = THREAD_MAGIC;
 }
@@ -588,4 +628,11 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+	struct thread *thread_a = list_entry(a, struct thread, elem);
+	struct thread *thread_b = list_entry(b, struct thread, elem);
+
+	return thread_a->priority > thread_b->priority ? 1 : 0;
 }
