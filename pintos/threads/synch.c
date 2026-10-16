@@ -120,7 +120,12 @@ sema_up (struct semaphore *sema) {
 	}				
 	sema->value++;				
 	intr_set_level (old_level);		//# enable interrupt
-	thread_yield();					//# unblocked thread can run immediately if priority is higher
+
+	if (intr_context ()) {
+		intr_yield_on_return ();	//# interrupt handler context : yield when interrupt finishes returning
+	} else {
+		thread_yield();				//# normal thread context : unblocked thread can run immediately if priority is higher
+	}
 }
 
 
